@@ -1,0 +1,10 @@
+{
+  "files": {
+    "main.js": "/token-checker-mini/static/js/main.5ff3f561.js",
+    "index.html": "/token-checker-mini/index.html",
+    "main.5ff3f561.js.map": "/token-checker-mini/static/js/main.5ff3f561.js.map"
+  },
+  "entrypoints": [
+    "static/js/main.5ff3f561.js"
+  ]
+}
