@@ -1,14 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
 
-// PrismLight và import ngôn ngữ cho v15
-import { PrismLight as SyntaxHighlighter } from "react-syntax-highlighter";
-import { okaidia } from "react-syntax-highlighter/dist/esm/styles/prism";
-import solidity from "react-syntax-highlighter/dist/esm/languages/prism/solidity";
-
-// Register ngôn ngữ
-SyntaxHighlighter.registerLanguage("solidity", solidity);
-
 function App() {
   const [tokenAddress, setTokenAddress] = useState("");
   const [sourceCode, setSourceCode] = useState("");
@@ -24,7 +16,7 @@ function App() {
       }
 
       const chain = tokenAddress.startsWith("0x") ? "bsc" : "eth";
-      const apiKey = "YOUR_API_KEY"; // Thay bằng API key thật
+      const apiKey = process.env.REACT_APP_API_KEY;
 
       const url =
         chain === "bsc"
@@ -95,16 +87,6 @@ function App() {
           padding: "10px",
         }}
       />
-
-      {sourceCode && (
-        <SyntaxHighlighter
-          language="solidity"
-          style={okaidia}
-          wrapLongLines={true}
-        >
-          {sourceCode}
-        </SyntaxHighlighter>
-      )}
     </div>
   );
 }
