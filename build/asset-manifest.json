@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/token-checker-mini/static/css/main.dcb7d852.css",
+    "main.js": "/token-checker-mini/static/js/main.9a9552b1.js",
+    "index.html": "/token-checker-mini/index.html",
+    "main.dcb7d852.css.map": "/token-checker-mini/static/css/main.dcb7d852.css.map",
+    "main.9a9552b1.js.map": "/token-checker-mini/static/js/main.9a9552b1.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.dcb7d852.css",
+    "static/js/main.9a9552b1.js"
+  ]
+}
