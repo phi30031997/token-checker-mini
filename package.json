@@ -1,24 +1,26 @@
 {
-  "name": "token-checker-mini",
+  "name": "token-scam-checker-mini",
   "version": "1.0.0",
   "private": true,
+  "description": "React app for token scam checking",
   "engines": {
     "node": "22.x"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "cross-env CI=false react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "clean": "rm -rf node_modules package-lock.json && npm install"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-scripts": "^5.0.1"
+    "axios": "^1.5.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-scripts": "^5.0.1",
+    "web-vitals": "^3.1.1"
   },
-  "devDependencies": {
-    "cross-env": "^7.0.3"
-  },
+  "devDependencies": {},
   "browserslist": {
     "production": [
       ">0.2%",
