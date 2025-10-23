@@ -19,7 +19,7 @@
     "gh-pages": "^6.3.0"
   },
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   },
   "browserslist": {
     "production": [
