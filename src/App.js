@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import './App.css';
 
-// Lấy API key từ file .env
-const API_KEY = process.env.REACT_APP_API_KEY;
-
 function App() {
   const [address, setAddress] = useState('');
   const [sourceCode, setSourceCode] = useState('');
@@ -11,7 +8,7 @@ function App() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
 
-  // Hàm quét code nâng cao
+  // Hàm phân tích source code
   const scanSource = (code) => {
     if (!code) return;
 
@@ -69,7 +66,7 @@ function App() {
     setResult(checks);
   };
 
-  // Hàm gọi API Etherscan/BscScan V2
+  // Hàm gọi API serverless trên Vercel
   const checkToken = async (address) => {
     if (!address) return;
     setLoading(true);
@@ -77,35 +74,18 @@ function App() {
     setResult(null);
 
     try {
-      const ethUrl = `https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=${address}&apikey=${API_KEY}`;
-      const bscUrl = `https://api.etherscan.io/v2/api?chainid=56&module=contract&action=getsourcecode&address=${address}&apikey=${API_KEY}`;
+      const res = await fetch(`/api/getSource?address=${address}`);
+      const data = await res.json();
 
-      const [ethRes, bscRes] = await Promise.allSettled([fetch(ethUrl), fetch(bscUrl)]);
+      if (data.error) {
+        setError(data.error);
+        setLoading(false);
+        return;
+      }
 
-      let source = "";
-
-      // Parse API V2 chuẩn, tránh lỗi HTML
-      const parseResponse = async (res) => {
-        if (res.status !== "fulfilled") return "";
-        const text = await res.value.text(); // đọc raw text
-        try {
-          const data = JSON.parse(text); // parse JSON
-          // Etherscan V2: data.result = [{ SourceCode: '...' }]
-          if (data?.status === "1" && data?.result?.length > 0) {
-            return data.result.map(r => r.SourceCode).join("\n") || "";
-          }
-          return "";
-        } catch {
-          console.warn("API không trả JSON, raw text:", text);
-          return "";
-        }
-      };
-
-      source += await parseResponse(ethRes);
-      source += await parseResponse(bscRes);
-
+      const source = data.source || "";
       if (!source.trim()) {
-        setError("Không lấy được mã nguồn từ Etherscan/BscScan hoặc API trả HTML. Hãy dán source code bên dưới để check.");
+        setError("Không lấy được mã nguồn. Hãy dán source code bên dưới để check.");
         setLoading(false);
         return;
       }
