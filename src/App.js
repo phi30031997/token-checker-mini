@@ -1,92 +1,220 @@
-import React, { useState } from "react";
-import axios from "axios";
+import React, { useState } from 'react';
+import './App.css';
+
+// Lấy API key từ file .env
+const API_KEY = process.env.REACT_APP_API_KEY;
 
 function App() {
-  const [tokenAddress, setTokenAddress] = useState("");
-  const [sourceCode, setSourceCode] = useState("");
-  const [result, setResult] = useState("");
+  const [address, setAddress] = useState('');
+  const [sourceCode, setSourceCode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [result, setResult] = useState(null);
 
-  const checkToken = async () => {
-    setResult("");
-    setSourceCode("");
+  // Hàm quét code nâng cao
+  const scanSource = (code) => {
+    if (!code) return;
+
+    const checks = {
+      'Trap / Lock Sell': {
+        code: /_mode|setMode|MODE_TRANSFER|revert\(/i.test(code)
+          ? 'Có khả năng trap hoặc giới hạn bán'
+          : 'Không phát hiện trap trực tiếp',
+        reality: /handler|limitSell|antiBot/i.test(code)
+          ? 'Có xử lý trước khi bán, cần kiểm tra mục đích (anti-bot hay trap)'
+          : 'Không có logic trap trong giao dịch',
+      },
+      'Blacklist': {
+        code: /(blacklist|isBlacklisted)/i.test(code)
+          ? 'Phát hiện cơ chế blacklist trong code'
+          : 'Không có blacklist',
+        reality: /(removeFromBlacklist|clearBlacklist)/i.test(code)
+          ? 'Có cơ chế gỡ blacklist → ít rủi ro'
+          : 'Không có cơ chế gỡ blacklist → có thể khóa ví vĩnh viễn',
+      },
+      'Tax / Fee': {
+        code: /(setFee|takeFee|_tax|feeDenominator|updateFee)/i.test(code)
+          ? 'Có thể chỉnh thuế hoặc phí giao dịch'
+          : 'Không phát hiện điều chỉnh thuế',
+        reality: /(maxFee|limit|<=3%|require\(fee <)/i.test(code)
+          ? 'Giới hạn mức thuế hợp lý → minh bạch'
+          : 'Không có giới hạn thuế → có thể tăng cao tùy ý',
+      },
+      'Owner Control': {
+        code: /(onlyOwner|renounceOwnership|transferOwnership)/i.test(code)
+          ? 'Phát hiện quyền Owner trong code'
+          : 'Không có onlyOwner',
+        reality: /(multiSig|timelock)/i.test(code)
+          ? 'Multi-sig hoặc timelock → ít rủi ro'
+          : 'Chưa thấy multi-sig → kiểm tra quyền kiểm soát cá nhân',
+      },
+      'Before Transfer Hook': {
+        code: /(_beforeTokenTransfer|_transfer)/i.test(code)
+          ? 'Có beforeTransfer hook'
+          : 'Không có beforeTransfer',
+        reality: /(event|marketing|distribute)/i.test(code)
+          ? 'Hook dùng cho event/phân phối → an toàn'
+          : 'Hook có thể can thiệp giao dịch → cần xem chi tiết',
+      },
+      'Mint': {
+        code: /(mint|_mint)/i.test(code)
+          ? 'Có khả năng mint thêm token'
+          : 'Không phát hiện mint',
+        reality: /(maxSupply|fixed)/i.test(code)
+          ? 'Đã giới hạn supply → an toàn'
+          : 'Không thấy maxSupply → có thể mở rộng nguồn cung',
+      },
+    };
+
+    setResult(checks);
+  };
+
+  // Hàm gọi API Etherscan/BscScan V2
+  const checkToken = async (address) => {
+    if (!address) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+
     try {
-      if (!tokenAddress) {
-        setResult("⚠️ Vui lòng nhập địa chỉ token.");
+      const ethUrl = `https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=${address}&apikey=${API_KEY}`;
+      const bscUrl = `https://api.etherscan.io/v2/api?chainid=56&module=contract&action=getsourcecode&address=${address}&apikey=${API_KEY}`;
+
+      const [ethRes, bscRes] = await Promise.allSettled([fetch(ethUrl), fetch(bscUrl)]);
+
+      let source = "";
+
+      // Parse API V2 chuẩn, tránh lỗi HTML
+      const parseResponse = async (res) => {
+        if (res.status !== "fulfilled") return "";
+        const text = await res.value.text(); // đọc raw text
+        try {
+          const data = JSON.parse(text); // parse JSON
+          // Etherscan V2: data.result = [{ SourceCode: '...' }]
+          if (data?.status === "1" && data?.result?.length > 0) {
+            return data.result.map(r => r.SourceCode).join("\n") || "";
+          }
+          return "";
+        } catch {
+          console.warn("API không trả JSON, raw text:", text);
+          return "";
+        }
+      };
+
+      source += await parseResponse(ethRes);
+      source += await parseResponse(bscRes);
+
+      if (!source.trim()) {
+        setError("Không lấy được mã nguồn từ Etherscan/BscScan hoặc API trả HTML. Hãy dán source code bên dưới để check.");
+        setLoading(false);
         return;
       }
 
-      const chain = tokenAddress.startsWith("0x") ? "bsc" : "eth";
-      const apiKey = process.env.REACT_APP_API_KEY;
-
-      const url =
-        chain === "bsc"
-          ? `https://api.bscscan.com/api?module=contract&action=getsourcecode&address=${tokenAddress}&apikey=${apiKey}`
-          : `https://api.etherscan.io/api?module=contract&action=getsourcecode&address=${tokenAddress}&apikey=${apiKey}`;
-
-      const response = await axios.get(url);
-
-      const source =
-        response.data?.result?.[0]?.SourceCode || "";
-
-      if (source) {
-        setSourceCode(source);
-        setResult("✅ Đã lấy được source code từ explorer.");
-      } else {
-        setResult(
-          "⚠️ Không lấy được mã nguồn từ API. Vui lòng paste thủ công vào ô dưới."
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      setResult(
-        "⚠️ Không lấy được mã nguồn từ API. Vui lòng paste thủ công vào ô dưới."
-      );
+      setSourceCode(source);
+      scanSource(source);
+    } catch (e) {
+      setError("Lỗi khi kiểm tra: " + String(e));
+    } finally {
+      setLoading(false);
     }
   };
 
+  const handlePasteCheck = () => {
+    if (!sourceCode) return;
+    scanSource(sourceCode);
+  };
+
   return (
-    <div style={{ padding: "20px", maxWidth: "900px", margin: "0 auto" }}>
-      <h1>Token Scam Checker ⚡</h1>
+    <div style={{ fontFamily: 'Arial, sans-serif', background: '#0f172a', minHeight: '100vh', color: '#fff', padding: 24 }}>
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+        <h1 style={{ fontSize: 28, marginBottom: 8 }}>Token Scam Checker PRO ⚡</h1>
+        <p style={{ color: '#9ca3af' }}>Kiểm tra nhanh dấu hiệu rủi ro trong smart contract.</p>
 
-      <input
-        type="text"
-        placeholder="Nhập địa chỉ token (BSC hoặc ETH)"
-        value={tokenAddress}
-        onChange={(e) => setTokenAddress(e.target.value)}
-        style={{
-          width: "100%",
-          padding: "10px",
-          fontSize: "16px",
-          marginBottom: "10px",
-        }}
-      />
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <input
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Nhập địa chỉ token (0x...)"
+            style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #334155' }}
+          />
+          <button
+            onClick={() => checkToken(address)}
+            disabled={loading}
+            style={{ padding: '10px 16px', borderRadius: 8, background: '#2563eb', color: '#fff', border: 'none' }}
+          >
+            {loading ? 'Đang kiểm tra...' : 'Kiểm tra'}
+          </button>
+        </div>
 
-      <button
-        onClick={checkToken}
-        style={{
-          padding: "10px 20px",
-          fontSize: "16px",
-          cursor: "pointer",
-        }}
-      >
-        Kiểm tra
-      </button>
+        {error && (
+          <div style={{ marginTop: 12, padding: 12, background: '#7f1d1d', borderRadius: 8 }}>
+            {error}
+          </div>
+        )}
 
-      <p style={{ marginTop: "10px", fontWeight: "bold" }}>{result}</p>
+        <div style={{ marginTop: 16 }}>
+          <label htmlFor="pasteSource">Hoặc dán source code:</label>
+          <textarea
+            id="pasteSource"
+            rows={10}
+            value={sourceCode}
+            onChange={(e) => setSourceCode(e.target.value)}
+            style={{
+              width: '100%',
+              marginTop: 8,
+              padding: 12,
+              borderRadius: 8,
+              border: '1px solid #334155',
+              background: '#1e293b',
+              color: '#fff',
+            }}
+          />
+          <button
+            onClick={handlePasteCheck}
+            style={{ marginTop: 8, padding: '10px 16px', borderRadius: 8, background: '#16a34a', color: '#fff', border: 'none' }}
+          >
+            Check source code
+          </button>
+        </div>
 
-      <textarea
-        placeholder="Hoặc dán source code contract ở đây"
-        value={sourceCode}
-        onChange={(e) => setSourceCode(e.target.value)}
-        rows={15}
-        style={{
-          width: "100%",
-          marginTop: "10px",
-          fontFamily: "monospace",
-          fontSize: "14px",
-          padding: "10px",
-        }}
-      />
+        {result && (
+          <div style={{ marginTop: 24 }}>
+            <h3 style={{ fontSize: 22, marginBottom: 12 }}>📊 Kết quả phân tích chi tiết</h3>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr 1fr',
+                background: '#1e293b',
+                borderRadius: 8,
+                overflow: 'hidden',
+              }}
+            >
+              <div style={{ padding: 12, fontWeight: 'bold', background: '#0f172a' }}>Tiêu chí</div>
+              <div style={{ padding: 12, fontWeight: 'bold', background: '#0f172a' }}>Phân tích từ code</div>
+              <div style={{ padding: 12, fontWeight: 'bold', background: '#0f172a' }}>Nhận định thực tế</div>
+
+              {Object.entries(result).map(([key, val]) => (
+                <React.Fragment key={key}>
+                  <div style={{ padding: 12, borderTop: '1px solid #334155' }}>{key}</div>
+                  <div style={{ padding: 12, borderTop: '1px solid #334155', color: '#fbbf24' }}>{val.code}</div>
+                  <div
+                    style={{
+                      padding: 12,
+                      borderTop: '1px solid #334155',
+                      color: val.reality.includes('rủi ro') ? '#f87171' : '#a5f3fc',
+                    }}
+                  >
+                    {val.reality}
+                  </div>
+                </React.Fragment>
+              ))}
+            </div>
+            <p style={{ marginTop: 12, color: '#94a3b8' }}>
+              ⚠️ Công cụ phân tích nhanh, không thay thế audit chuyên sâu.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
